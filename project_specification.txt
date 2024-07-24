@@ -1,0 +1,283 @@
+ECS Database.
+
+Client define components, entities and system queries
+Server adapt to registered queries and create components on the fly
+Data stored once, accessed in any form.
+
+Use case: e-commerce
+
+// Errors
+my_errs {
+  NotFound,
+  DBMismatch,
+  ExpectedSingleGotMany,
+}
+
+// Enums
+MetaCommands {
+  Quit,
+  Help,
+  DB,
+  Entities,
+  Components,
+  Systems,
+  DescribeDB,
+  DescribeEntity,
+  DescribeComponent,
+  DescribeSystem,
+  Exists
+}
+
+Commands {
+  Select,
+  // SELECT component1, component2, component3
+  // WHERE condition1 and (condition2 or condition3)
+  // LIMIT n
+  Insert,
+  // INSERT User(
+    Name="Caio",
+    Role="admin",
+    ...
+  )
+  Update,
+  // UPDATE id_nnnn User(
+    Name="Caio",
+    Role="admin",
+    ...
+  )
+  Drop,
+  // DROP Entity
+  // WHERE conditions . . . 
+
+  Custom
+  // FUNC name_of_func
+  // WHERE query_param1, query_param2, ... # position args only. will fail if query "open spaces" do no match args
+  // APPLY func_param1, func_param2, func_param3, ... # these are positional arguments to be passed to the callable. These are always strigs. it is the job of the callable to correctly parse the string.
+}
+
+// Components:
+// Components is where the actual values live
+Name(str)
+Role(enum) {
+  visitor,
+  client,
+  admin, 
+  service
+}
+Price(float)
+Picture(bytes)
+Address{
+    .street: str,
+    .zipcode: int
+}
+Country(enum)
+State(enum)
+Comment(str)
+
+DeliveryStatus {
+    shipped,
+    delivered,
+    lost
+}
+
+// Entities
+// Entities are just ids and carry no value per-se
+User {
+    Name,
+    Role,
+    LastLogin
+    ?Picture,
+    ?Country,
+    ?State,
+    ?Address
+}
+
+Product {
+    Name,
+    Picture,
+    Price,
+    Quantity,
+}
+
+Sale {
+    *User,
+    *Product,
+    Price,
+    Country,
+    State,
+    Address,
+    DeliveryStatus,
+    Timestamp
+}
+
+Review {
+    *User,
+    Comment,
+    Timestamp
+}
+
+Log {
+    *User,
+    Comment,
+    Timestamp
+}
+
+// Systems
+struct CLI:
+    // database version control
+    fn init():
+
+    // compare current structure, generate file of changes
+    fn revision():
+
+    // from file, apply changes
+    fn apply_changes():
+
+struct DBContext:
+    allocator: *Allocator,
+    server_config: port,
+    filepath: ?File,
+    entites = dict(Entity, men_ptr),
+    components = dict(Component, mem_ptr),
+    systems = dict(str, function),
+    write_ahead_logging = ArrayList(empty)
+    configs = .{
+      page_size = 4kb
+      validate_db = True // this will check if the file DB matches the current set of components and entities
+      batch: 5 // wait for 5 changes in db before writing to disk
+      db_default_location: "./data"
+    }
+
+    fn init(allocator, ?dbname, .{configs}):
+        self.allocator = allocator;
+        if (dbname) and (dbname.exists()) // dbname is a sys directory where we store all components.
+            // try load db from file
+            // try populate entity and components pointers
+            // if (validade_db) {
+                match the file_db with the entities and components currently declared.
+                if mismatch return DBMismatch
+            }
+        else 
+            self.entities = dict.init()
+            self.components = dict.init()
+        return DBContext;
+
+    fn deinit(self):
+        // clean system
+    
+    fn flush(self):
+        // write db to file
+        self.write_ahead_logging.write()
+
+    fn serve():
+        // listen to calls
+        // periodically write WAL to disk
+        // handle responses to user commands
+
+    fn createDatabase(self, dbname) !void {
+        // user provides a database_name. if not exist, create directory with that name.
+    }
+
+    fn createEntity(self, entity) !void {
+        entity_ptr = allocate array for entity ids
+        // store entity_ptr
+        for (entity) |component} {
+            comp_ptr = try self.locate(component) catch |err| {
+                if (err == NotFound) createComponent(component)
+                else return err
+            }
+        }
+    }
+
+    fn createComponent(self, component) !void{
+        // alocate memory to component
+        // how much memory should we allocate as default?
+        // store slice to self.components
+    }
+
+    fn locate(self, entity|component) NotFound!mem_pointer {
+        for (self.entity|components) |e/comp, mem_ptr| {
+          if (e/comp == entity/component) return mem_ptr
+        }
+        return NotFound
+    }
+
+    fn batch_exec(self, list_of_actions) {
+        // dont really know what to do here...
+    }
+
+    fn parse_metacommands() {}
+
+    fn parse_commands() {}
+
+    fn add_systems(ctx, Query, callable) {
+        // inspect the query. if enum is part of it, create new components to better organize array_ids
+        // how do we expose variable parameter of the query?
+    }
+
+    // default queries
+    fn drop(ctx, id|ids) !void {
+        // can only drop full entities
+        // drop all the entities matching the id
+    }
+
+    fn insert(ctx, entity) !void {
+        // can only insert full entities.
+    }
+
+    fn update(ctx, id, Entity) !void {
+        // the default update allows only replacement of a single entity_id with a new entity.
+        // if the query return a list of matched ids, returns ExpectedSingleGotMany
+    }
+
+    fn select(ctx, ids, Entity|Components) !list[Entity]|list[tuples] {
+        // if Entity, match all entity components to ids and return list
+        // if Component or list of components, the id *must* be present on all components to be a valid result
+    }
+
+struct Entity{}
+
+fn update_last_login(ctx, ids) !void:
+    matched_logins = ctx.select(ids, .{LastLogin, State})
+    for (matched_logins) |ll| {
+        ll.* = timestamp.now()
+    }
+    
+// can we systematically expose documentation to custom created functions?
+// maybe this is important because parsing strings will be pretty common task running inside the function
+// and there's no direct way to read the inner matching strings.
+fn update_purchase_status(ctx, ids, new_status) !void:
+    parse_stats = match new_status {
+        "created" => DeliveryStatus.Created,
+        "cancelled" => DeliveryStatus.Cancelled,
+        "returned" => DeliveryStatus.Returned,
+        "delivered" => DeliveryStatus.Delivered,
+    }
+    matched_logins = ctx.select(ids, .{DeliveryStatus})
+    for (matched_logins) |stats| {
+        stats.* = parse_stats
+    }
+
+
+// how things should work:
+fn main() !void {
+    gpa = std.mem.gpa();
+    allocator = gpa.allocator();
+    ctx = DBContext.init(&Allocator, "meu_arquivo.db")
+
+    entities = {User, Product, Sale, Review, Logs};
+    for (entites) |e| {
+        ctx.createEntity(e);
+    }
+
+    ctx.add_systems(
+        ("last_login", Query, update_last_login),
+        ("cancel_purchase", Query, cancel_purchase)
+    )
+
+    // once served, the client get access to the default "select", "insert", "update" & "drop" commands
+    // you also get access to all systems explicitly added to the server.
+    // it is the job of the server to parse the requests from the user to the appropriate db action
+    ctx.serve()
+}
+
