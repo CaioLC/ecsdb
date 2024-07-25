@@ -57,6 +57,15 @@ Commands {
 
 // Components:
 // Components is where the actual values live
+// What is a Component?
+struct Component {
+  lock,
+  cursor,
+  record_size,
+  reader,
+  writer
+}
+
 Name(str)
 Role(enum) {
   visitor,
@@ -184,7 +193,7 @@ struct DBContext:
         for (entity) |component} {
             comp_ptr = try self.locate(component) catch |err| {
                 if (err == NotFound) createComponent(component)
-                else return err
+                else return
             }
         }
     }
@@ -210,9 +219,9 @@ struct DBContext:
 
     fn parse_commands() {}
 
-    fn add_systems(ctx, Query, callable) {
+    fn add_systems(ctx, "r/w", system_name, Query, callable) {
         // inspect the query. if enum is part of it, create new components to better organize array_ids
-        // how do we expose variable parameter of the query?
+        ctd.write_systems.append()
     }
 
     // default queries
@@ -241,6 +250,10 @@ fn update_last_login(ctx, ids) !void:
     matched_logins = ctx.select(ids, .{LastLogin, State})
     for (matched_logins) |ll| {
         ll.* = timestamp.now()
+        // if users manipulate data directly, can we ensure "commit", "rollback" and crash-recovery?
+        // maybe we have to disallow directly derefence and create a .set() method to the component
+        // so that we can write changes to a WAL, instead of directly writing it to the array.
+        ll.set() = timestamp.now()
     }
     
 // can we systematically expose documentation to custom created functions?
@@ -270,9 +283,15 @@ fn main() !void {
         ctx.createEntity(e);
     }
 
-    ctx.add_systems(
+    // I have separated systems, because I can run read systems in parallel and write systems hold a lock. 
+    // Maybe we dont need that and read/write is defined at introspection level...
+    ctx.add_write_systems(
         ("last_login", Query, update_last_login),
         ("cancel_purchase", Query, cancel_purchase)
+    )
+    ctx.add_read_systems(
+        ("users_by_state", Query, users_groupby_state),
+        ("purchases_cancelled", Query, purchases_cancelled)
     )
 
     // once served, the client get access to the default "select", "insert", "update" & "drop" commands
