@@ -1,0 +1,54 @@
+Entities: a list of all issued ids
+EntityA, EntityB, etc.: a list of ids related to that entity
+ComponentA, ComponentB...: ids -> value
+
+// Insert operation:
+// 1. get new id
+// 2. write id to the Entities
+// 3. write id to EntityX
+// 4. write id -> value to components
+// 1 -> [2, 3, 4] -> return
+
+// Update operation:
+// Parallel iter through matching ids.
+// Each iter is responsible for updating all components
+
+// Delete:
+// Find matching ids. delete slice and rewrite
+
+Entities: [
+  0001,
+  0002,
+  0003,
+  0004,
+  0005,
+  0006,
+  0007, <- Cursor
+]
+
+Users: [
+  0001,
+  0002,
+  0004,
+]
+
+Products: [
+  0003,
+  0005,
+]
+
+Name [
+  0001 -> "Caio",
+  0002 -> "Adriana",
+  0003 -> "Vassoura",
+  0004 -> "Joe", <-- Cursor
+]
+
+Role [
+  0001 -> admin, <-- Cursor
+]
+
+LastLogin [
+  0001 -> today, <-- Cursor
+]
+

@@ -1,12 +1,16 @@
+//
 ECS Database.
 
 Client define components, entities and system queries
 Server adapt to registered queries and create components on the fly
 Data stored once, accessed in any form.
 
-Use case: e-commerce
+Some references:
+https://notes.eatonphil.com/zigrocks-sql.html
+//
 
-// Errors
+// Use case: e-commerce
+
 my_errs {
   NotFound,
   DBMismatch,
@@ -26,6 +30,46 @@ MetaCommands {
   DescribeComponent,
   DescribeSystem,
   Exists
+}
+
+Token {
+
+}
+
+Condition {
+  lhs: Any
+  rhs: Any
+  operator: equals | in
+  not: ?not
+  next: ?Condition
+  operator: And | Or | XOr
+
+  fn from_string()
+}
+
+Query {
+  select: [Entities | Components]
+  where: [Condition]
+  limit: u32
+
+  fn from_string(req: str) -> !Self {
+    // we expect utf-8
+    // string manipulation steps
+    // remove \r (to account for windows)
+    // replace \n with spaces
+    var req_array = req.split(" ")
+    // find all keywords if they exist. only "select" is mandatory
+    var s_loc = try find "select" or "SELECT" in req_array
+    var w_loc = find "where" or "WHERE" in req_array catch req_array.len
+    var l_loc = find "limit" or "LIMIT" in req_array catch req_array.len
+
+    select_types = req_array[s_loc+1..w_loc]
+    assert select_types.len >= 1 // at least one select is excpected
+    for (select_types) |type_name| {
+      select.append(@astype(type_name))
+    }
+    
+  }
 }
 
 Commands {
@@ -130,6 +174,10 @@ Log {
     Comment,
     Timestamp
 }
+
+// This maybe necessary to match strings to types present in the DB
+// the parser may need to access this list to build the queries
+RegisteredTypes: Array
 
 // Systems
 struct CLI:
